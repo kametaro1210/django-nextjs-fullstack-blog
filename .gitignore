@@ -1,0 +1,5 @@
+backend-django/.env
+backend-django/myvenv/
+backend-django/db.sqlite3
+backend-django/**/__pycache__/
+backend-django/accounts/migrations/
