@@ -1,0 +1,253 @@
+
+===============================
+Next.jsプロジェクト準備メモ
+===============================
+
+このメモでは、Next.js 16を使うための準備、プロジェクトの作成、UIや各種ライブラリの導入、動作確認の手順を説明します。
+
+基本的に、以下のコマンドはPowerShellで実行します。
+特に記載がない限り、プロジェクトのルートフォルダ（frontend-nextjs）に移動してから実行します。
+
+-----------------------------------
+1. Node.jsとnpmが使えることを確認する
+-----------------------------------
+
+実行するコマンド:
+
+node --version
+npm --version
+
+何をしているか:
+Node.jsとnpmのバージョンを表示しています。Next.jsの実行にはNode.jsが必要で、npmはライブラリのインストールに使います。
+
+確認すること:
+Next.js 16ではNode.js 20.9.0以上を使います。Next.jsのバージョンによって要件は変わるため、インストール時に公式ドキュメントの要件も確認してください。
+Node.jsを入れた後にターミナルを開き直してから、上記コマンドを実行します。
+
+----------------------------------
+2. Next.jsプロジェクトを作成する
+----------------------------------
+
+プロジェクトの親フォルダで実行するコマンド:
+
+npx create-next-app@16 frontend-nextjs
+
+何をしているか:
+create-next-appを使って、Next.js 16のひな形をfrontend-nextjsフォルダに作成しています。
+npxは、npmパッケージを一度実行するためのコマンドです。
+
+作成時の質問では、このプロジェクトに合わせて次のように選びます。
+質問項目はツールのバージョンにより異なる場合があります。
+
+TypeScript: Yes
+ESLint: Yes
+Tailwind CSS: Yes
+src/ directory: No
+App Router: Yes
+Import alias: @/*
+
+何を選んでいるか:
+TypeScriptで型を付け、ESLintでコードを検査します。App Routerを使うと、画面やレイアウトをappフォルダに作成できます。
+Import aliasの@/*を使うと、プロジェクト内のファイルを@/components/...のように読み込めます。
+
+注意:
+frontend-nextjsフォルダがすでに存在し、中にファイルがある場合は、
+この作成コマンドをもう一度実行しません。
+既存のプロジェクトでは、そのフォルダへ移動して手順を続けます。
+
+------------------------------------
+3. プロジェクトフォルダへ移動する
+------------------------------------
+
+実行するコマンド:
+
+cd frontend-nextjs
+
+何をしているか:
+Next.jsプロジェクトのルートフォルダへ移動しています。
+
+なぜ必要か:
+npmコマンドは、package.jsonがあるフォルダで実行します。別の場所で実行すると、ライブラリを誤った場所にインストールしたり、スクリプトを実行できなかったりします。
+
+---------------------------------------
+4. shadcn/uiを初期設定する
+---------------------------------------
+
+frontend-nextjsフォルダで実行するコマンド:
+
+npx shadcn@latest init
+
+何をしているか:
+shadcn/uiの設定ファイルや、コンポーネントを追加するための基本設定を作成しています。
+
+設定時は、Tailwind CSSの設定ファイルとCSSファイルの場所、色、コンポーネントのスタイルなどを指定します。
+このプロジェクトでは、components.jsonに設定内容が保存され、コンポーネントはcomponents/ui、共通処理はlibに配置します。
+
+コンポーネントを追加する例:
+
+npx shadcn@latest add button dropdown-menu form input label textarea sonner
+
+何をしているか:
+指定したUIコンポーネントのソースコードをプロジェクトに追加しています。
+shadcn/uiは、完成済みのUIを外部ライブラリから呼び出すだけではなく、コンポーネントのコードをプロジェクト内に追加して利用します。
+
+-------------------------------------------
+5. このプロジェクトで使うライブラリを入れる
+-------------------------------------------
+
+必要な機能に応じて、frontend-nextjsフォルダで実行します。
+
+npm install --legacy-peer-deps @hookform/resolvers @radix-ui/react-dropdown-menu @radix-ui/react-icons @radix-ui/react-label @radix-ui/react-slot @radix-ui/react-toast @tailwindcss/postcss class-variance-authority clsx cn date-fns lucide-react next-auth next-themes radix-ui react-hook-form react-hot-toast react-images-uploading sonner tailwind-merge tailwindcss-animate tw-animate-css zod
+
+何をしているか:
+フォーム、UI部品、アイコン、日付処理、認証、通知など、
+このプロジェクトで使うライブラリをpackage.jsonに登録してインストールしています。
+
+開発時だけ使うライブラリは、次のように-Dを付けてインストールします:
+
+npm install --save-dev --legacy-peer-deps @types/node @types/react @types/react-dom autoprefixer eslint eslint-config-next postcss tailwindcss typescript
+
+create-next-appやshadcn/uiの初期設定ですでに追加されているライブラリは、重ねてインストールする必要はありません。
+使わないライブラリを一括で追加せず、必要になった時点で個別にインストールしても構いません。
+
+package.json:
+npmが使うライブラリ名やバージョン範囲を記録します。
+
+package-lock.json:
+実際にインストールされたライブラリのバージョンを記録します。他の環境で同じ構成をインストールするときは、このファイルをGitで共有し、npm ciを使います。
+
+--------------------------------------------
+6. 手作業で変更するファイルとコード
+--------------------------------------------
+
+Next.jsの基本ファイルはcreate-next-appが作成します。
+components.json、lib/utils.ts、components/ui/以下のUIファイルはshadcn/uiのコマンドで作成されます。
+これらを一から手作業で作る必要はありません。
+
+このプロジェクトで手作業で変更するのは、package.jsonとapp/globals.cssです。
+
+6-1. package.jsonのdevコマンドを変更する
+
+package.jsonを開き、scriptsのdevの値だけを変更します。
+
+変更前:
+
+"dev": "next dev"
+
+変更後:
+
+"dev": "next dev --webpack"
+
+何を変更したか:
+開発サーバーをWebpackで起動するように指定しています。npm run devを実行すると、この設定が使われます。
+package.json全体を書き換えず、devの値だけを変更します。JSONのカンマも残します。
+
+6-2. app/globals.cssを置き換える
+
+app/globals.cssを開き、ファイル内の既存コードをすべて削除して、次の3行に置き換えます:
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+何を変更したか:
+Tailwind CSSの基本スタイル、コンポーネント用スタイル、utility classを読み込む記述に置き換えています。
+以前のファイルにあった@import、@theme、CSS変数、@layerの記述も、この置き換えで削除されます。
+
+6-3. Sonner通知を使う場合だけlayout.tsxを変更する
+
+Sonnerコンポーネントを追加しただけでは、通知の表示領域は配置されません。通知を使う場合はapp/layout.tsxのimportに次の行を追加します:
+
+import { Toaster } from "@/components/ui/sonner";
+
+既存のbodyを次のように変更します:
+
+<body className="min-h-full flex flex-col">
+	{children}
+	<Toaster />
+</body>
+
+何を変更したか:
+全ページ共通のlayoutに通知表示領域を追加しています。layout.tsx全体は置き換えません。
+Sonner通知を使わない場合、この変更は不要です。
+
+注意:
+現在のpackage.jsonはtailwindcss 3系と@tailwindcss/postcss 4系を同時に含んでいます。また、現在のapp/globals.cssはTailwind CSS 3形式です。
+Tailwind CSSの処理設定とUIの見た目は、開発サーバーが起動することとは別に確認します。Tailwind CSS 3と4の設定を混在させないでください。
+
+------------------------------------
+7. 開発用サーバーを起動する
+------------------------------------
+
+package.jsonがあるfrontend-nextjsフォルダで実行します:
+
+npm run dev
+
+何をしているか:
+Next.jsの開発用サーバーを起動しています。
+
+ブラウザで http://localhost:3000/ を開くと、アプリを確認できます。
+画面を編集すると、開発サーバーが変更を検知してブラウザに反映します。
+サーバーを停止するには、ターミナルでCtrl+Cを押します。
+
+--------------------------------
+8. ビルドとコードを確認する
+--------------------------------
+
+本番用のビルドを確認するコマンド:
+
+npm run build
+
+何をしているか:
+本番環境向けにアプリをビルドし、設定やコードに問題がないか確認しています。
+
+ESLintを実行するコマンド:
+
+npx eslint .
+
+ESLintでコードを検査します。
+
+-------------------------------------
+9. 別の環境で依存関係を復元する
+-------------------------------------
+
+package.jsonとpackage-lock.jsonがあるfrontend-nextjsフォルダで実行します:
+
+npm ci --legacy-peer-deps
+
+何をしているか:
+package-lock.jsonに記録されたバージョンを使って、依存関係をインストールしています。
+
+npm ciは既存のnode_modulesを作り直します。
+初回作成時や、package.jsonを変更した後に通常使うnpm installとは用途が異なります。
+
+package-lock.jsonを削除したり、他の人の変更を確認せずに作り直したりしないでください。
+
+----------------------
+全体の流れ（まとめ）
+----------------------
+
+プロジェクトの親フォルダで:
+
+npx create-next-app@16 frontend-nextjs
+cd frontend-nextjs
+npx shadcn@latest init
+npx shadcn@latest add button dropdown-menu form input label textarea
+npx shadcn@latest add sonner --overwrite
+
+起動前に、package.jsonのdevを"next dev --webpack"に変更し、app/globals.cssを次の3行に置き換えます:
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+Sonner通知を使う場合は、手順6-3に従ってapp/layout.tsxにもToasterを追加します。
+
+npm run dev
+
+使用する追加ライブラリは手順5のnpm installコマンドでインストールします。
+作業後は、npm run buildとnpx eslint .で確認します。
+
+作業を終えるとき:
+
+ターミナルでCtrl+Cを押して、開発サーバーを停止します。
