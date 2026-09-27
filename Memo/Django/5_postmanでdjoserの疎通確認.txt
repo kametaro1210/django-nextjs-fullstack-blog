@@ -1,0 +1,818 @@
+
+DjoserのAPIをPostmanで疎通確認する
+====================================
+
+このメモは、このプロジェクトの設定を前提に、
+Djoserのユーザー登録・メール認証・JWTログインをPostmanで確認する手順です。
+
+1. 先に確認するプロジェクト設定
+
+URLの登録場所
+このメモでは、ユーザー登録からJWTログインまでを確認します。
+backend-django/mysite/urls.py で、次の2つを登録しています。
+------------------------------------------------------------------------
+1. キーは決まっているのか
+------------------------------------------------------------------------
+
+結論: Djoserの標準APIでは、URL・Body・Headerのキーが決まっています。
+ただし、ユーザーモデルやDjoserの設定を変更すると、使えるキーは変わります。
+
+キーの種類                 例                         どこで決まるか
+--------------------------  -------------------------  -----------------------------
+URL                         /users/                    DjoserのURL設定
+Body                        email, password            DjoserのSerializer
+Header                      Authorization               Django REST Frameworkの認証設定
+ユーザー固有の項目          name, introduction          自作UserモデルとSerializer
+
+このプロジェクトの場合
+----------------------
+
+ファイル: backend-django/mysite/urls.py
+
+	path("api/auth/", include("djoser.urls")),
+	path("api/auth/", include("djoser.urls.jwt")),
+
+すべてのDjoser URLの先頭は次のとおりです。
+
+	http://127.0.0.1:8000/api/auth/
+
+ファイル: backend-django/mysite/settings.py
+
+	"LOGIN_FIELD": "email"
+
+ログインには `username` ではなく `email` を使います。
+
+	"USER_CREATE_PASSWORD_RETYPE": True
+	"SET_PASSWORD_RETYPE": True
+
+登録時は `password` と `re_password`、パスワード変更時は
+`new_password` と `re_new_password` が必要です。
+
+	"AUTH_HEADER_TYPES": ("JWT",)
+
+認証Headerは次の形式です。`Bearer` ではありません。
+
+	Authorization: JWT アクセストークン
+
+------------------------------------------------------------------------
+2. キーを確認する場所
+------------------------------------------------------------------------
+
+URLを確認する
+------------
+
+1. プロジェクトの `mysite/urls.py` でincludeされているURLを見る。
+2. Djoserの公式ドキュメントでエンドポイントを見る。
+3. インストール済みパッケージの次のファイルを見る。
+
+	   backend-django/myvenv/Lib/site-packages/djoser/urls.py
+	   backend-django/myvenv/Lib/site-packages/djoser/urls/jwt.py
+
+Bodyのキーを確認する
+--------------------
+
+キーはSerializerで決まります。次のファイルを確認します。
+
+	backend-django/myvenv/Lib/site-packages/djoser/serializers.py
+
+主に確認するSerializer:
+
+	UserCreatePasswordRetypeSerializer    ユーザー登録
+	ActivationSerializer                   メール認証
+	SetPasswordRetypeSerializer            パスワード変更
+	PasswordResetConfirmRetypeSerializer   パスワード再設定
+
+このプロジェクトで追加したユーザー項目は、次のファイルで確認します。
+
+	backend-django/accounts/models.py
+	backend-django/accounts/serializers.py
+
+ユーザー登録の実際のキーは、現在のSerializerを確認すると次のとおりです。
+
+	name, email, password, re_password
+
+`uid` は登録後に自動生成されます。自分で作成して入力しません。
+`uid` と `token` は、メール認証やパスワード再設定のメールから取得します。
+
+------------------------------------------------------------------------
+3. Postmanを使う準備
+------------------------------------------------------------------------
+
+3-1. Djangoを起動する
+---------------------
+
+ターミナルで次を実行します。
+
+	cd backend-django
+	.\myvenv\Scripts\Activate.ps1
+	python manage.py runserver
+
+次の表示が出れば起動しています。
+
+	Starting development server at http://127.0.0.1:8000/
+
+3-2. Postmanでリクエストを作る
+------------------------------
+
+1. Postmanを開き、左上の `New` を押す。
+2. `HTTP Request` を選ぶ。
+3. URLの左側でHTTPメソッドを選ぶ。
+4. URLを入力する。
+5. `Body` → `raw` → 右側の種類を `JSON` にする。
+6. JSONを入力する。
+7. `Send` を押す。
+8. 下側のResponseでStatusと本文を確認する。
+
+JSONを送るときは、Headersに次を設定します。BodyをJSONにすると自動設定される場合もあります。
+
+	Content-Type: application/json
+
+PostmanのEnvironmentを使う場合は、次の変数を登録します。
+
+	base_url       http://127.0.0.1:8000/api/auth
+	email          受信できるメールアドレス
+	password       TestPass123!
+	access_token   JWTログイン後のaccess
+	refresh_token  JWTログイン後のrefresh
+
+URLでは、登録した変数を `{{base_url}}` のように使用します。
+
+------------------------------------------------------------------------
+4. 疎通確認の手順
+------------------------------------------------------------------------
+
+手順1: ユーザー登録
+-------------------
+
+Method: POST
+
+URL:
+
+	{{base_url}}/users/
+
+Body → raw → JSON:
+
+	{
+	  "email": "{{email}}",
+	  "name": "テストユーザー",
+	  "password": "{{password}}",
+	  "re_password": "{{password}}"
+	}
+
+キーの意味:
+
+	email        メールアドレス。ログインにも使用する
+	name         ユーザー名。このプロジェクトでは必須
+	password     パスワード
+	re_password  passwordと同じパスワード
+
+`password` と `re_password` は同じ値にします。
+成功するとHTTP 201が返ります。
+
+手順2: メール認証
+-----------------
+
+このプロジェクトは `SEND_ACTIVATION_EMAIL = True` のため、登録後にメール認証が必要です。
+メールから `uid` と `token` をコピーします。
+
+Method: POST
+
+URL:
+
+	{{base_url}}/users/activation/
+
+Body:
+
+	{
+	  "uid": "メールからコピーしたuid",
+	  "token": "メールからコピーしたtoken"
+	}
+
+成功するとHTTP 204が返ります。204は本文がなくても成功です。
+
+手順3: JWTログイン
+------------------
+
+Method: POST
+
+URL:
+
+	{{base_url}}/jwt/create/
+
+Body:
+
+	{
+	  "email": "{{email}}",
+	  "password": "{{password}}"
+	}
+
+成功すると、次のようなResponseが返ります。
+
+	{
+	  "refresh": "長いJWT文字列",
+	  "access": "長いJWT文字列"
+	}
+
+Responseの `access` を `access_token` に、`refresh` を `refresh_token` に保存します。
+
+手順4: 認証が必要なAPIを呼ぶ
+----------------------------
+
+Method: GET
+
+URL:
+
+	{{base_url}}/users/me/
+
+Headers:
+
+	Authorization: JWT {{access_token}}
+
+`Authorization` の値は、`JWT`、半角スペース、accessトークンの順です。
+成功すると、ログイン中のユーザー情報が返ります。
+
+------------------------------------------------------------------------
+5. よく使うURLとキー
+------------------------------------------------------------------------
+
+URL                                      Method  Bodyのキー
+----------------------------------------  ------  ------------------------------------
+/users/                                  POST    email, name, password, re_password
+/users/me/                               GET     なし
+/users/me/                               PATCH   変更するユーザー項目
+/users/activation/                       POST    uid, token
+/users/set_password/                     POST    current_password, new_password,
+														re_new_password
+/users/reset_password/                   POST    email
+/users/reset_password_confirm/           POST    uid, token, new_password,
+														re_new_password
+/jwt/create/                             POST    email, password
+/jwt/refresh/                            POST    refresh
+/jwt/verify/                             POST    token
+
+認証が必要なURLには、次のHeaderを付けます。
+
+	Authorization: JWT {{access_token}}
+
+------------------------------------------------------------------------
+6. パスワード変更と再設定
+------------------------------------------------------------------------
+
+ログイン中のパスワードを変更する
+--------------------------------
+
+Method: POST
+
+URL:
+
+	{{base_url}}/users/set_password/
+
+Headers:
+
+	Authorization: JWT {{access_token}}
+
+Body:
+
+	{
+	  "current_password": "{{password}}",
+	  "new_password": "NewTestPass123!",
+	  "re_new_password": "NewTestPass123!"
+	}
+
+パスワードを忘れた場合
+----------------------
+
+1. `POST {{base_url}}/users/reset_password/` に次を送る。
+
+	   {
+		 "email": "{{email}}"
+	   }
+
+2. 届いたメールから `uid` と `token` をコピーする。
+3. `POST {{base_url}}/users/reset_password_confirm/` に次を送る。
+
+	   {
+		 "uid": "メールからコピーしたuid",
+		 "token": "メールからコピーしたtoken",
+		 "new_password": "NewTestPass123!",
+		 "re_new_password": "NewTestPass123!"
+	   }
+
+------------------------------------------------------------------------
+7. エラーが出たときの確認
+------------------------------------------------------------------------
+
+400 Bad Request
+	Bodyのキー不足、キー名の間違い、パスワード不一致、メールアドレス重複。
+
+401 Unauthorized
+	Authorizationがない、`JWT` がない、accessの期限切れ、パスワード間違い。
+
+404 Not Found
+	URLの間違い。`/api/auth/`、URL末尾の `/`、`jwt/create/` を確認する。
+
+最初に次の3点を確認します。
+
+1. HTTPメソッドとURLが正しいか。
+2. Bodyが `raw` と `JSON` になっているか。
+3. 認証が必要な場合、Headerが `Authorization: JWT トークン` になっているか。
+
+エラーの詳しい理由は、PostmanのResponse本文と、Djangoを起動したターミナルのエラーで確認します。
+
+	path("api/auth/", include("djoser.urls")),
+	path("api/auth/", include("djoser.urls.jwt")),
+
+そのため、DjoserのAPIの先頭には、すべて次の文字列が付きます。
+
+	http://127.0.0.1:8000/api/auth/
+
+`djoser.urls` はユーザー登録やパスワード変更などを提供し、
+`djoser.urls.jwt` はJWTの発行・更新・検証を提供します。
+
+このプロジェクト固有の設定
+--------------------------
+
+設定ファイル: backend-django/mysite/settings.py
+
+	"LOGIN_FIELD": "email"
+
+ログインにはユーザー名ではなく、メールアドレスを使用します。
+
+	"USER_CREATE_PASSWORD_RETYPE": True
+
+ユーザー登録時は `password` と `re_password` の両方が必要です。
+
+	"SET_PASSWORD_RETYPE": True
+
+パスワード変更時は `new_password` と `re_new_password` の両方が必要です。
+
+	"AUTH_HEADER_TYPES": ("JWT",)
+
+ログイン後のAPIアクセスでは、次の形式でアクセストークンを送ります。
+
+	Authorization: JWT アクセストークン
+
+`Bearer` ではなく `JWT` なので注意してください。
+
+カスタムユーザーの項目
+----------------------
+
+accounts/models.py の UserAccount には、主に次の項目があります。
+
+	uid          文字列。登録後に自動生成されるため、登録時は入力しない
+	email        メールアドレス。必須かつログインID
+	name         文字列。必須
+	avatar       画像。任意
+	introduction 文字列。任意
+	password     パスワード。登録時に必須
+
+`uid` はHashidsで自動作成されます。Postmanから適当な値を入れる項目ではありません。
+また、passwordはデータベースに平文では保存されず、Djangoがハッシュ化します。
+
+------------------------------------------------------------------------
+2. キーはどこで確認するのか
+------------------------------------------------------------------------
+
+「キー」は主に、次の3種類に分けて考えると分かりやすくなります。
+
+1. URLのキー（パス）
+2. リクエストボディのキー
+3. HTTPヘッダーのキー
+
+URLのキーを確認する場所
+------------------------
+
+Djoserの標準URLは、インストールされているDjoserの `urls.py` と公式ドキュメントで確認できます。
+このプロジェクトでは、ルートURLに `djoser.urls` と `djoser.urls.jwt` をincludeしていることが重要です。
+
+例:
+
+	/users/
+	/users/activation/
+	/users/reset_password/
+	/jwt/create/
+
+リクエストボディのキーを確認する場所
+------------------------------------
+
+キーは、Djoserが使うSerializer（シリアライザ）が決めています。
+Djoserの標準Serializerは、インストールされたPython環境の次の場所で確認できます。
+
+	backend-django/myvenv/Lib/site-packages/djoser/serializers.py
+
+特に、次のクラスを確認します。
+
+	UserCreateSerializer
+	UserCreatePasswordRetypeSerializer
+	ActivationSerializer
+	PasswordResetConfirmRetypeSerializer
+	SetPasswordRetypeSerializer
+
+このプロジェクトでは、ユーザー情報の表示・登録用に settings.py の
+`DJOSER["SERIALIZERS"]` で `accounts.serializers.UserSerializer` を指定しています。
+accounts/serializers.py では Userモデルの全フィールドを返す設定です。
+
+ただし、登録やパスワード変更の入力キーは、Djoserが追加するSerializerの仕様にも左右されます。
+「画面に返ってきたJSONの項目」と「次に送る入力項目」は同じとは限りません。
+
+------------------------------------------------------------------------
+3. 型と値の基本ルール
+------------------------------------------------------------------------
+
+PostmanのBodyでは、`raw` と `JSON` を選択します。
+通常の文字列はダブルクォーテーションで囲み、数字やtrue/falseは文字列にしません。
+
+	"email": "user@example.com"   文字列
+	"name": "山田太郎"              文字列
+	"password": "TestPass123!"      文字列
+	"uid": "Ab12cd34"               文字列
+	"is_active": true                真偽値
+
+メールアドレス
+--------------
+
+実在するメールアドレス形式を使います。メール認証を行う設定なので、開発環境で受信できるアドレスを使うか、Djangoのメール設定をコンソール出力用にします。
+
+パスワード
+----------
+
+Djangoのパスワードバリデーションを通る値を使います。例:
+
+	TestPass123!
+
+`password` と `re_password`、または `new_password` と `re_new_password` は、同じ値にします。
+
+uidとtoken
+----------
+
+どちらも、メール本文またはAPIレスポンスに含まれる値をそのまま使用します。
+自分で作成した値を入力するものではありません。
+
+------------------------------------------------------------------------
+4. 起動とPostmanの共通準備
+------------------------------------------------------------------------
+
+ターミナル1: Djangoを起動
+--------------------------
+
+プロジェクトのbackend-djangoへ移動し、仮想環境を有効にしてから起動します。
+
+	cd backend-django
+	.\myvenv\Scripts\Activate.ps1
+	python manage.py migrate
+	python manage.py runserver
+
+次の表示が出れば起動完了です。
+
+	Starting development server at http://127.0.0.1:8000/
+
+Postmanの共通設定
+-----------------
+
+Environmentを作成し、次の変数を登録すると入力ミスを減らせます。
+
+	base_url = http://127.0.0.1:8000/api/auth
+	email = 受信できるメールアドレス
+	password = TestPass123!
+	access_token = ログイン後に取得した値
+	refresh_token = ログイン後に取得した値
+
+BodyをJSONで送るリクエストには、Headersへ次を設定します。
+
+	Content-Type: application/json
+
+ログイン後の認証が必要なリクエストには、さらに次を設定します。
+
+	Authorization: JWT {{access_token}}
+
+PostmanのAuthorizationタブでTypeをBearer Tokenにすると、先頭がBearerになることがあります。このプロジェクトではJWTが必要なので、Headersに手入力する方法が確実です。
+
+------------------------------------------------------------------------
+5. 実行する順番
+------------------------------------------------------------------------
+
+5-1. ユーザー登録
+-----------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/users/
+
+Body > raw > JSON:
+
+	{
+	  "email": "{{email}}",
+	  "name": "テストユーザー",
+	  "password": "{{password}}",
+	  "re_password": "{{password}}"
+	}
+
+キーの意味:
+
+	email       文字列。ログインに使用するメールアドレス
+	name        文字列。UserAccountの必須項目
+	password    文字列。ログイン用パスワード
+	re_password 文字列。passwordと同じ値
+
+成功すると、通常はHTTP 201 Createdになります。
+レスポンスには、設定によってuid・email・nameなどのユーザー情報が返ります。
+
+このプロジェクトでは `SEND_ACTIVATION_EMAIL = True` のため、登録直後はメール認証が必要です。
+メールが届かない場合は、Djangoのターミナル、SMTP設定、迷惑メールフォルダーを確認します。
+
+5-2. 本登録（アカウント有効化）
+------------------------------
+
+メール本文、またはメールテンプレートにある `uid` と `token` を確認します。
+この2つはメールごとに異なるため、固定値ではありません。
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/users/activation/
+
+Body:
+
+	{
+	  "uid": "メールに記載されたuid",
+	  "token": "メールに記載されたtoken"
+	}
+
+成功するとHTTP 204 No Contentになることがあります。204はレスポンス本文が空でも成功です。
+
+5-3. JWTログイン
+----------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/jwt/create/
+
+Body:
+
+	{
+	  "email": "{{email}}",
+	  "password": "{{password}}"
+	}
+
+成功すると、次のようなJSONが返ります。
+
+	{
+	  "refresh": "長いJWT文字列",
+	  "access": "長いJWT文字列"
+	}
+
+`access` を `access_token` に、`refresh` を `refresh_token` にPostmanのEnvironmentへ保存します。
+普段のAPIアクセスには短い有効期間のaccessを使い、期限切れ後はrefreshで新しいaccessを取得します。
+
+5-4. ログイン中のユーザーを取得
+------------------------------
+
+Method:
+
+	GET
+
+URL:
+
+	{{base_url}}/users/me/
+
+Headers:
+
+	Authorization: JWT {{access_token}}
+
+成功すると、ログイン中のユーザー情報が返ります。
+ここで401 Unauthorizedになる場合は、トークンの値、ヘッダーの形式、トークンの有効期限を確認します。
+
+5-5. ユーザー情報を変更
+------------------------
+
+Method:
+
+	PATCH
+
+URL:
+
+	{{base_url}}/users/me/
+
+Headers:
+
+	Content-Type: application/json
+	Authorization: JWT {{access_token}}
+
+Body:
+
+	{
+	  "name": "更新後の名前",
+	  "introduction": "自己紹介を更新しました"
+	}
+
+PATCHは変更したい項目だけを送ります。emailなど、認証に関係する項目の変更は専用APIの仕様を確認してから行います。
+
+5-6. パスワード変更
+--------------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/users/set_password/
+
+Headers:
+
+	Content-Type: application/json
+	Authorization: JWT {{access_token}}
+
+Body:
+
+	{
+	  "current_password": "{{password}}",
+	  "new_password": "NewTestPass123!",
+	  "re_new_password": "NewTestPass123!"
+	}
+
+現在のパスワードが正しく、2つの新パスワードが一致すれば成功します。
+
+------------------------------------------------------------------------
+6. パスワードを忘れた場合の確認
+------------------------------------------------------------------------
+
+このプロジェクトではパスワードリセット用のメールを送信する設定です。
+
+6-1. リセットメールを要求
+--------------------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/users/reset_password/
+
+Body:
+
+	{
+	  "email": "{{email}}"
+	}
+
+メール本文から `uid` と `token` を取り出します。値はユーザーごと・要求ごとに変わります。
+
+6-2. 新しいパスワードを設定
+----------------------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/users/reset_password_confirm/
+
+Body:
+
+	{
+	  "uid": "メールに記載されたuid",
+	  "token": "メールに記載されたtoken",
+	  "new_password": "NewTestPass123!",
+	  "re_new_password": "NewTestPass123!"
+	}
+
+成功すると、次回から新しいパスワードでログインします。
+
+------------------------------------------------------------------------
+7. よく使うURLと必要なキー一覧
+------------------------------------------------------------------------
+
+URL                                      Method  Bodyの主なキー                         認証
+----------------------------------------  ------  ------------------------------------  ------
+/users/                                  POST    email, name, password, re_password     不要
+/users/                                  GET     なし                                   必要
+/users/me/                               GET     なし                                   必要
+/users/me/                               PATCH   変更するユーザー項目                 必要
+/users/activation/                       POST    uid, token                            不要
+/users/resend_activation/                POST    email                                  不要
+/users/set_password/                     POST    current_password, new_password,      必要
+														re_new_password
+/users/reset_password/                   POST    email                                  不要
+/users/reset_password_confirm/           POST    uid, token, new_password,             不要
+														re_new_password
+/jwt/create/                             POST    email, password                        不要
+/jwt/refresh/                            POST    refresh                                不要
+/jwt/verify/                             POST    token                                  不要
+
+`GET /users/` はユーザー一覧取得のため、通常は管理者権限が必要です。
+`users/me/` の `me` は固定文字列で、ユーザーのuidをURLに入れるものではありません。
+
+------------------------------------------------------------------------
+8. accessトークンの更新と検証
+------------------------------------------------------------------------
+
+アクセストークンを更新
+----------------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/jwt/refresh/
+
+Body:
+
+	{
+	  "refresh": "{{refresh_token}}"
+	}
+
+返ってきた `access` をPostmanの `access_token` に入れ替えます。
+
+トークンを検証
+--------------
+
+Method:
+
+	POST
+
+URL:
+
+	{{base_url}}/jwt/verify/
+
+Body:
+
+	{
+	  "token": "{{access_token}}"
+	}
+
+問題がなければ成功します。トークンの期限切れや改ざんがあるとエラーになります。
+
+------------------------------------------------------------------------
+9. エラーの読み方
+------------------------------------------------------------------------
+
+400 Bad Request
+---------------
+
+Bodyのキー不足、型の違い、メールアドレスの重複、パスワード不一致などです。
+レスポンスJSONのキー名が、修正すべき入力キーを示していることが多いです。
+
+401 Unauthorized
+----------------
+
+Authorizationヘッダーがない、JWTの先頭が `JWT` ではない、accessの期限切れ、パスワード間違いなどです。
+
+403 Forbidden
+-------------
+
+ログインはできていても、その操作に必要な権限がない場合です。
+
+404 Not Found
+-------------
+
+URLの入力ミスが代表例です。`/api/auth/` の付け忘れ、`jwt/create/` の綴り、末尾の `/` の有無を確認します。
+
+500 Internal Server Error
+-------------------------
+
+Djangoのターミナルに表示されたTracebackを確認します。メール設定や環境変数が原因の場合があります。
+
+------------------------------------------------------------------------
+10. 失敗したときの確認順
+------------------------------------------------------------------------
+
+1. Djangoサーバーが起動しているか確認する。
+2. URLが `http://127.0.0.1:8000/api/auth/...` になっているか確認する。
+3. MethodがGET/POST/PATCHのどれか正しいか確認する。
+4. Bodyの種類がraw・JSONになっているか確認する。
+5. Content-Typeが `application/json` になっているか確認する。
+6. Djoserが要求するキー名を確認する。`password_confirmation` など、似た名前にしない。
+7. `password` と `re_password` が一致しているか確認する。
+8. 認証が必要なURLには `Authorization: JWT {{access_token}}` があるか確認する。
+9. メールから取得したuidとtokenを改変せずに貼り付ける。
+10. Postmanのレスポンス本文と、Djangoターミナルのエラーを照らし合わせる。
+
+------------------------------------------------------------------------
+11. 重要なまとめ
+------------------------------------------------------------------------
+
+・URLは、ルートURLに登録した `djoser.urls` と `djoser.urls.jwt` から決まる。
+・Bodyのキーは、DjoserのSerializerとプロジェクトのカスタムSerializerで決まる。
+・このプロジェクトのログインキーは `email` であり、`username` ではない。
+・登録時の必須キーは、基本的に `email`, `name`, `password`, `re_password` である。
+・`uid` と `token` はメールなどから取得し、自分で考えて入力しない。
+・JWTのヘッダーは `Authorization: JWT トークン` である。`Bearer` ではない。
+・エラーが出たら、HTTPステータス、レスポンスJSON、Djangoターミナルの3つを確認する。
+
+DjoserのバージョンアップやSerializerのカスタマイズでキーが変わる可能性があります。
+最終的には、現在インストールされている `djoser/serializers.py` と、このプロジェクトの `settings.py` を確認してください。
