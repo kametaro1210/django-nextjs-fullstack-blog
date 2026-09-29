@@ -108,21 +108,21 @@ MEDIA_URL = "/media/"  # ユーザーがアップロードしたファイルのU
 DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
 
 CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": env("CLOUDINARY_NAME"),
-    "API_KEY": env("CLOUDINARY_API_KEY"),
-    "API_SECRET": env("CLOUDINARY_API_SECRET"),
+    "CLOUD_NAME": env("CLOUDINARY_NAME", default="demo"),
+    "API_KEY": env("CLOUDINARY_API_KEY", default="000000000000000"),
+    "API_SECRET": env("CLOUDINARY_API_SECRET", default="demo-secret"),
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # メール設定
-EMAIL_BACKEND = env("EMAIL_BACKEND")
-EMAIL_HOST = env("EMAIL_HOST")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="localhost")
 EMAIL_PORT = 587
-EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@example.com")
 
 # Rest Framework設定
 REST_FRAMEWORK = {
@@ -194,5 +194,5 @@ DJOSER = {
 AUTH_USER_MODEL = "accounts.UserAccount"
 
 # サイト設定
-SITE_DOMAIN = env("SITE_DOMAIN")
-SITE_NAME = env("SITE_NAME")
+SITE_DOMAIN = env("SITE_DOMAIN", default="127.0.0.1:8000")
+SITE_NAME = env("SITE_NAME", default="My Site")
