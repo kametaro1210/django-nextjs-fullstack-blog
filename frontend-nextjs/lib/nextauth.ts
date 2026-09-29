@@ -1,4 +1,4 @@
-import type { NextAuthConfig } from "next-auth"
+import NextAuth, { type NextAuthConfig } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import type { JWT } from "next-auth/jwt"
 
@@ -400,4 +400,26 @@ export const authConfig: NextAuthConfig = {
       return session
     },
   },
+}
+
+/**
+ * NextAuth ヘルパー関数と設定の初期化
+ */
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
+
+/**
+ * 認証情報取得（サーバーサイド用）
+ */
+/**
+ * 認証情報取得（サーバーサイド用）
+ */
+export const getAuthSession = async (): Promise<UserType | null> => {
+    const session = await auth()
+
+    if (!session || !session.accessToken) {
+        return null
+    }
+
+    // NextAuthのsessionからDjangoのユーザー情報(UserType)を取り出して返却
+    return (session.user as UserType) || null
 }
