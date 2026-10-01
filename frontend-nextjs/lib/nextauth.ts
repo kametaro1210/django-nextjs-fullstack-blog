@@ -410,9 +410,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
 /**
  * 認証情報取得（サーバーサイド用）
  */
-/**
- * 認証情報取得（サーバーサイド用）
- */
 export const getAuthSession = async (): Promise<UserType | null> => {
     const session = await auth()
 
